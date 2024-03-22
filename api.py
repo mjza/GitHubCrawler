@@ -66,7 +66,7 @@ def fetch_organizations():
 
         # Dynamically adjust sleep time based on remaining rate limit
         if rate_limits:
-            sleep_time = 5 if rate_limits['remaining'] > 100 else 60
+            sleep_time = 1 if rate_limits['remaining'] > 100 else 60
             time.sleep(sleep_time)
     
     close_connection(conn)
