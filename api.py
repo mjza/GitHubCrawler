@@ -1,5 +1,5 @@
 import requests
-from database import open_connection, close_connection, create_tables, get_max_id, insert_organization_data, insert_user_data, insert_repository_data, insert_issue_data
+from database import open_connection, close_connection, create_tables, get_max_id, fetch_users_batch, insert_organization_data, insert_user_data, insert_repository_data, insert_issue_data
 from config import BASE_URL, PARAMS_BASE, HEADERS
 from requests.exceptions import ConnectionError, Timeout
 import time
@@ -104,8 +104,7 @@ def fetch_users():
             'since': max_id
         })
         
-        has_more = True
-        
+        has_more = True        
         while has_more:
             rate_limits = get_rate_limits()
             if rate_limits and rate_limits['remaining'] == 0:
@@ -140,7 +139,7 @@ def fetch_users():
                 
                 print(f"Page of users since ID {params['since']} has been processed.")
                 params['since'] = users[-1]['id']  # Update 'since' to the last user's ID
-            elif response:
+            elif response and response.status_code >= 400:
                 print(f"Failed to fetch users: HTTP {response.status_code}, Error: {response.text}")    
             else:
                 print(f"Failed to fetch users data since {params['since']}. No response is available.")
@@ -149,5 +148,76 @@ def fetch_users():
             if rate_limits:
                 sleep_time = 1 if rate_limits['remaining'] > 100 else 60
                 time.sleep(sleep_time)        
+    finally:
+        close_connection(conn)
+        
+def fetch_user_repositories():
+    """
+    Fetches repositories for each user from the GitHub API and inserts data into the database.
+    """
+    conn = open_connection()
+    try:
+        create_tables(conn)
+
+        last_owner_id = 0
+        while True:
+            rate_limits = get_rate_limits()
+            if rate_limits and rate_limits['remaining'] == 0:
+                reset_time = rate_limits['reset']
+                sleep_duration = max(reset_time - time.time(), 1)
+                print(f"Rate limit exceeded. Sleeping for {sleep_duration} seconds.")
+                time.sleep(sleep_duration)
+                continue
+            
+            # Fetch a batch of users from the database
+            users = fetch_users_batch(conn, last_owner_id=last_owner_id, batch_size=100)
+            if not users:
+                print("No more users to process.")
+                break
+
+            for user in users:
+                login = user['login']
+                repos_url = f"{BASE_URL}/users/{login}/repos"
+
+                params= {
+                    'type': 'public',
+                    'sort': 'created',
+                    'direction': 'asc',
+                    'per_page': 100,
+                    'page': 1
+                }
+
+                has_more_pages = True
+                while has_more_pages:
+                    response = safe_request(repos_url, headers=HEADERS, params=params)
+                    if response.status_code == 200:
+                        repos = response.json()
+                        if not repos:
+                            print(f"No more repositories to fetch for user {login}.")
+                            break
+
+                        for repo in repos:
+                            repo['owner'] = login
+                            repo['owner_id'] = user['id']
+                            repo['owner_type'] = user['type']
+                            insert_repository_data(conn, repo)
+
+                        if 'next' in response.links:
+                            params['page'] += 1  # Go to the next page
+                        else:
+                            has_more_pages = False
+                    elif response and response.status_code >= 400:
+                        print(f"Failed to fetch repositories for user {repos_url}. HTTP {response.status_code}, Error: {response.text}")
+                    else:
+                        print(f"Failed to fetch repositories for user {repos_url}. No response is available")
+                    
+                    # Dynamically adjust sleep time based on remaining rate limit
+                    if rate_limits:
+                        sleep_time = 1 if rate_limits['remaining'] > 100 else 60
+                        time.sleep(sleep_time)
+                                    
+            # Assuming the 'id' of the last user in the batch is the highest 'id' processed in this batch
+            last_owner_id = users[-1]['id']
+            
     finally:
         close_connection(conn)

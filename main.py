@@ -29,7 +29,7 @@ def read_yes_no(prompt_message):
             print(f"{red}Invalid input. Please enter 'Y' for Yes or 'N' for No.{reset}")
 
 def main():
-    from api import fetch_organizations, fetch_users
+    from api import fetch_organizations, fetch_users, fetch_user_repositories
     
     blue = fg('blue')
     green = fg('green')
@@ -58,6 +58,10 @@ def main():
             print(f"{green}Fetching users...{reset}")          
             fetch_users()
             print(f"{green}Successfully fetched all users.{reset}")
+        elif command == "3":
+            print(f"{green}Fetching repositories...{reset}")          
+            fetch_user_repositories()
+            print(f"{green}Successfully fetched all repositories.{reset}")    
         else:
             print(f"{green}Unknown command number. Please try again.{reset}")  
 

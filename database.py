@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import psycopg2
+import json
 
 DBMS = os.getenv('DBMS')
 
@@ -107,7 +108,7 @@ def create_tables(conn):
         archived BOOLEAN,
         disabled BOOLEAN,
         open_issues_count INTEGER,
-        license TEXT,
+        license JSON,
         allow_forking BOOLEAN,
         is_template BOOLEAN,
         web_commit_signoff_required BOOLEAN,
@@ -116,7 +117,8 @@ def create_tables(conn):
         forks INTEGER,
         open_issues INTEGER,
         watchers INTEGER,
-        default_branch TEXT
+        default_branch TEXT,
+        permissions JSON
     )
     ''')
 
@@ -221,12 +223,13 @@ def insert_user_data(conn, user_data):
         error = EXCLUDED.error
     '''
     cursor.execute(sql, (
-        user_data.get('id'), user_data.get('login'), user_data.get('node_id'), user_data.get('avatar_url'), 
-        user_data.get('gravatar_id'), user_data.get('url'), user_data.get('html_url'), user_data.get('type'), 
+        user_data.get('id'), user_data.get('login'), user_data.get('node_id'), user_data.get('type'), 
+        user_data.get('avatar_url'), user_data.get('gravatar_id'), user_data.get('url'), user_data.get('html_url'), 
         user_data.get('site_admin'), user_data.get('name'), user_data.get('company'), user_data.get('blog'),
         user_data.get('location'), user_data.get('email'), user_data.get('hireable'), user_data.get('bio'), 
         user_data.get('twitter_username'), user_data.get('public_repos'), user_data.get('public_gists'),
-        user_data.get('followers'), user_data.get('following'), user_data.get('created_at'), user_data.get('updated_at'), user_data.get('error', False)
+        user_data.get('followers'), user_data.get('following'), user_data.get('created_at'), 
+        user_data.get('updated_at'), user_data.get('error', False)
     ))
     conn.commit()
 
@@ -238,9 +241,9 @@ def insert_repository_data(conn, repo_data):
         id, node_id, name, full_name, private, owner, owner_type, owner_id, html_url, description, fork, url, created_at, updated_at, pushed_at, homepage, 
         size, stargazers_count, watchers_count, language, has_issues, has_projects, has_downloads, has_wiki, has_pages, has_discussions, forks_count, 
         mirror_url, archived, disabled, open_issues_count, license, allow_forking, is_template, web_commit_signoff_required, 
-        topics, visibility, forks, open_issues, watchers, default_branch
+        topics, visibility, forks, open_issues, watchers, default_branch, permissions
     ) 
-    VALUES ({PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH})
+    VALUES ({PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH})
     ON CONFLICT(id) DO UPDATE SET
         node_id = EXCLUDED.node_id,
         name = EXCLUDED.name,
@@ -281,7 +284,8 @@ def insert_repository_data(conn, repo_data):
         forks = EXCLUDED.forks,
         open_issues = EXCLUDED.open_issues,
         watchers = EXCLUDED.watchers,
-        default_branch = EXCLUDED.default_branch
+        default_branch = EXCLUDED.default_branch,
+        permissions = EXCLUDED.permissions
     '''
     cursor.execute(sql, (
         repo_data.get('id'), repo_data.get('node_id'), repo_data.get('name'), repo_data.get('full_name'), repo_data.get('private'), 
@@ -291,9 +295,9 @@ def insert_repository_data(conn, repo_data):
         repo_data.get('language'), repo_data.get('has_issues'), repo_data.get('has_projects'), repo_data.get('has_downloads'), 
         repo_data.get('has_wiki'), repo_data.get('has_pages'), repo_data.get('has_discussions'), repo_data.get('forks_count'), 
         repo_data.get('mirror_url'), repo_data.get('archived'), repo_data.get('disabled'), repo_data.get('open_issues_count'), 
-        repo_data.get('license'), repo_data.get('allow_forking'), repo_data.get('is_template'), repo_data.get('web_commit_signoff_required'), 
-        repo_data.get('topics'), repo_data.get('visibility'), repo_data.get('forks'), repo_data.get('open_issues'), 
-        repo_data.get('watchers'), repo_data.get('default_branch')
+        json.dumps(repo_data.get('license', {})), repo_data.get('allow_forking'), repo_data.get('is_template'), repo_data.get('web_commit_signoff_required'), 
+        json.dumps(repo_data.get('topics', [])), repo_data.get('visibility'), repo_data.get('forks'), repo_data.get('open_issues'), 
+        repo_data.get('watchers'), repo_data.get('default_branch'), json.dumps(repo_data.get('permissions', {}))
     ))
     conn.commit()
 
@@ -347,3 +351,35 @@ def get_max_id(conn, table_name):
     if result:
         return result[0] or 0
     return 0
+
+def fetch_users_batch(conn, last_owner_id=0, batch_size=100):
+    """
+    Fetches a batch of users from the database whose ID is greater than the last maximum owner_id
+    found in the repositories table and greater than any previously processed user ID.
+    
+    Args:
+        conn: Database connection object.
+        last_owner_id: The maximum owner_id processed in the last batch.
+        batch_size: Number of users to fetch per batch.
+    
+    Returns:
+        A list of dictionaries, each representing a user.
+    """
+    cursor = conn.cursor()
+
+    # First, find the current maximum owner_id in the repositories table
+    cursor.execute("SELECT MAX(owner_id) FROM repositories")
+    max_owner_id = cursor.fetchone()[0] or 0
+    max_id_to_fetch = max(last_owner_id, max_owner_id)
+
+    # Fetch users whose ID is greater than max_id_to_fetch
+    sql = f"""
+        SELECT id, login, type FROM users 
+        WHERE id > {PH} 
+        ORDER BY id ASC 
+        LIMIT {PH}
+        """
+    cursor.execute(sql, (max_id_to_fetch, batch_size))
+
+    users = cursor.fetchall()
+    return [{'id': user[0], 'login': user[1], 'type': user[2]} for user in users]
