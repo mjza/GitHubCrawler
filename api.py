@@ -103,13 +103,15 @@ def fetch_users():
 
                 for user_summary in users:
                     # Fetch detailed user information
-                    user_detail_url = f"{BASE_URL}/users/{user_summary.get('login')}"
+                    user_detail_url = user_summary.get('url')
                     detail_response = requests.get(user_detail_url, headers=HEADERS)
                     if detail_response.status_code == 200:
                         user_data = detail_response.json()
                         insert_user_data(conn, user_data)
                     else:
-                        print(f"Failed to fetch detailed data for user {user_summary.get('login')}: HTTP {detail_response.status_code}, Error: {detail_response.text}")
+                        print(f"Failed to fetch detailed data for user: {user_summary.get('url')}\nHTTP {detail_response.status_code}, Error: {detail_response.text}")
+                        user_summary['error'] = True
+                        insert_user_data(conn, user_summary)
                 
                 print(f"Page of users since ID {params['since']} has been processed.")
                 params['since'] = users[-1]['id']  # Update 'since' to the last user's ID

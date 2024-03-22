@@ -69,7 +69,8 @@ def create_tables(conn):
             followers INTEGER,
             following INTEGER,
             created_at TEXT,
-            updated_at TEXT
+            updated_at TEXT,
+            error BOOLEAN NOT NULL DEFAULT FALSE
         )
     ''')
 
@@ -191,9 +192,9 @@ def insert_user_data(conn, user_data):
         id, login, node_id, type, avatar_url, gravatar_id, url, html_url,
         site_admin, name, company, blog, location, email, hireable, bio, 
         twitter_username, public_repos, public_gists, followers, following, 
-        created_at, updated_at
+        created_at, updated_at, error
     ) 
-    VALUES ({PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH})
+    VALUES ({PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH})
     ON CONFLICT(id) DO UPDATE SET 
         login = EXCLUDED.login, 
         node_id = EXCLUDED.node_id, 
@@ -216,7 +217,8 @@ def insert_user_data(conn, user_data):
         followers = EXCLUDED.followers, 
         following = EXCLUDED.following, 
         created_at = EXCLUDED.created_at, 
-        updated_at = EXCLUDED.updated_at
+        updated_at = EXCLUDED.updated_at,
+        error = EXCLUDED.error
     '''
     cursor.execute(sql, (
         user_data.get('id'), user_data.get('login'), user_data.get('node_id'), user_data.get('avatar_url'), 
@@ -224,7 +226,7 @@ def insert_user_data(conn, user_data):
         user_data.get('site_admin'), user_data.get('name'), user_data.get('company'), user_data.get('blog'),
         user_data.get('location'), user_data.get('email'), user_data.get('hireable'), user_data.get('bio'), 
         user_data.get('twitter_username'), user_data.get('public_repos'), user_data.get('public_gists'),
-        user_data.get('followers'), user_data.get('following'), user_data.get('created_at'), user_data.get('updated_at')
+        user_data.get('followers'), user_data.get('following'), user_data.get('created_at'), user_data.get('updated_at'), user_data.get('error', False)
     ))
     conn.commit()
 
