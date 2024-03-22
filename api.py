@@ -1,5 +1,4 @@
 import requests
-import json
 from database import open_connection, close_connection, create_tables, get_max_id, insert_organization_data, insert_user_data, insert_repository_data, insert_issue_data
 from config import BASE_URL, PARAMS_BASE, HEADERS
 import time
