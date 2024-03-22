@@ -168,7 +168,8 @@ def create_tables(conn):
 def insert_organization_data(conn, org_data):
     cursor = conn.cursor()
     sql = f'''
-    INSERT INTO organizations (id, login, node_id, description) 
+    INSERT INTO organizations 
+    (id, login, node_id, description) 
     VALUES ({PH}, {PH}, {PH}, {PH})
     ON CONFLICT(id) DO UPDATE SET 
         login = EXCLUDED.login, 
@@ -228,10 +229,15 @@ def insert_user_data(conn, user_data):
     conn.commit()
 
 
-def insert_repository_data(conn, id, node_id, name, full_name, private, owner, owner_type, owner_id, html_url, description, fork, url, created_at, updated_at, pushed_at, homepage, size, stargazers_count, watchers_count, language, has_issues, has_projects, has_downloads, has_wiki, has_pages, has_discussions, forks_count, mirror_url, archived, disabled, open_issues_count, license, allow_forking, is_template, web_commit_signoff_required, topics, visibility, forks, open_issues, watchers, default_branch):
+def insert_repository_data(conn, repo_data):
     cursor = conn.cursor()
-    cursor.execute(f'''
-    INSERT INTO repositories (id, node_id, name, full_name, private, owner, owner_type, owner_id, html_url, description, fork, url, created_at, updated_at, pushed_at, homepage, size, stargazers_count, watchers_count, language, has_issues, has_projects, has_downloads, has_wiki, has_pages, has_discussions, forks_count, mirror_url, archived, disabled, open_issues_count, license, allow_forking, is_template, web_commit_signoff_required, topics, visibility, forks, open_issues, watchers, default_branch) 
+    sql = f'''
+    INSERT INTO repositories (
+        id, node_id, name, full_name, private, owner, owner_type, owner_id, html_url, description, fork, url, created_at, updated_at, pushed_at, homepage, 
+        size, stargazers_count, watchers_count, language, has_issues, has_projects, has_downloads, has_wiki, has_pages, has_discussions, forks_count, 
+        mirror_url, archived, disabled, open_issues_count, license, allow_forking, is_template, web_commit_signoff_required, 
+        topics, visibility, forks, open_issues, watchers, default_branch
+    ) 
     VALUES ({PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH})
     ON CONFLICT(id) DO UPDATE SET
         node_id = EXCLUDED.node_id,
@@ -274,14 +280,26 @@ def insert_repository_data(conn, id, node_id, name, full_name, private, owner, o
         open_issues = EXCLUDED.open_issues,
         watchers = EXCLUDED.watchers,
         default_branch = EXCLUDED.default_branch
-    ''', 
-    (id, node_id, name, full_name, private, owner, owner_type, owner_id, html_url, description, fork, url, created_at, updated_at, pushed_at, homepage, size, stargazers_count, watchers_count, language, has_issues, has_projects, has_downloads, has_wiki, has_pages, has_discussions, forks_count, mirror_url, archived, disabled, open_issues_count, license, allow_forking, is_template, web_commit_signoff_required, topics, visibility, forks, open_issues, watchers, default_branch))
+    '''
+    cursor.execute(sql, (
+        repo_data.get('id'), repo_data.get('node_id'), repo_data.get('name'), repo_data.get('full_name'), repo_data.get('private'), 
+        repo_data.get('owner'), repo_data.get('owner_type'), repo_data.get('owner_id'), repo_data.get('html_url'), repo_data.get('description'), 
+        repo_data.get('fork'), repo_data.get('url'), repo_data.get('created_at'), repo_data.get('updated_at'), repo_data.get('pushed_at'), 
+        repo_data.get('homepage'), repo_data.get('size'), repo_data.get('stargazers_count'), repo_data.get('watchers_count'), 
+        repo_data.get('language'), repo_data.get('has_issues'), repo_data.get('has_projects'), repo_data.get('has_downloads'), 
+        repo_data.get('has_wiki'), repo_data.get('has_pages'), repo_data.get('has_discussions'), repo_data.get('forks_count'), 
+        repo_data.get('mirror_url'), repo_data.get('archived'), repo_data.get('disabled'), repo_data.get('open_issues_count'), 
+        repo_data.get('license'), repo_data.get('allow_forking'), repo_data.get('is_template'), repo_data.get('web_commit_signoff_required'), 
+        repo_data.get('topics'), repo_data.get('visibility'), repo_data.get('forks'), repo_data.get('open_issues'), 
+        repo_data.get('watchers'), repo_data.get('default_branch')
+    ))
     conn.commit()
 
-def insert_issue_data(conn, id, url, repository_id, repository_url, node_id, number, title, user, labels, state, locked, assignee, assignees, milestone, comments, created_at, updated_at, closed_at, author_association, active_lock_reason, body, reactions, state_reason):
+def insert_issue_data(conn, issue_data):
     cursor = conn.cursor()
-    cursor.execute(f'''
-    INSERT INTO issues (id, url, repository_id, repository_url, node_id, number, title, user, labels, state, locked, assignee, assignees, milestone, comments, created_at, updated_at, closed_at, author_association, active_lock_reason, body, reactions, state_reason) 
+    sql = f'''
+    INSERT INTO issues 
+    (id, url, repository_id, repository_url, node_id, number, title, user, labels, state, locked, assignee, assignees, milestone, comments, created_at, updated_at, closed_at, author_association, active_lock_reason, body, reactions, state_reason) 
     VALUES ({PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH})
     ON CONFLICT(id) DO UPDATE SET 
         url = EXCLUDED.url,
@@ -306,8 +324,15 @@ def insert_issue_data(conn, id, url, repository_id, repository_url, node_id, num
         body = EXCLUDED.body,
         reactions = EXCLUDED.reactions,
         state_reason = EXCLUDED.state_reason
-    ''', 
-    (id, url, repository_id, repository_url, node_id, number, title, user, labels, state, locked, assignee, assignees, milestone, comments, created_at, updated_at, closed_at, author_association, active_lock_reason, body, reactions, state_reason))
+    '''
+    cursor.execute(sql, (
+        issue_data.get('id'), issue_data.get('url'), issue_data.get('repository_id'), issue_data.get('repository_url'), 
+        issue_data.get('node_id'), issue_data.get('number'), issue_data.get('title'), issue_data.get('user'), 
+        issue_data.get('labels'), issue_data.get('state'), issue_data.get('locked'), issue_data.get('assignee'), 
+        issue_data.get('assignees'), issue_data.get('milestone'), issue_data.get('comments'), issue_data.get('created_at'), 
+        issue_data.get('updated_at'), issue_data.get('closed_at'), issue_data.get('author_association'), 
+        issue_data.get('active_lock_reason'), issue_data.get('body'), issue_data.get('reactions'), issue_data.get('state_reason')
+    ))
     conn.commit()
 
 def get_max_id(conn, table_name):
