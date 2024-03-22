@@ -51,11 +51,7 @@ def fetch_organizations():
                 break
 
             for org in data:
-                insert_organization_data(conn, 
-                                         org['id'], 
-                                         org.get('login'), 
-                                         org.get('node_id'), 
-                                         org.get('description'))
+                insert_organization_data(conn, org)
             
             print(f"Page of organizations since ID {params['since']} has been processed.")
             params['since'] = data[-1]['id']  # Update 'since' to the last organization's ID

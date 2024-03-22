@@ -3,10 +3,12 @@ import sqlite3
 import psycopg2
 
 DBMS = os.getenv('DBMS')
+
+# Determine the place holder
 if DBMS == 'SQLITE':
-    PLACE_HOLDER = "?"
+    PH = "?"
 elif DBMS == 'POSTGRES':
-    PLACE_HOLDER = "%s"
+    PH = "%s"
 else:
     raise ValueError("Unsupported DBMS")
 
@@ -44,12 +46,31 @@ def create_tables(conn):
     ''')
 
     cursor.execute('''
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER NOT NULL PRIMARY KEY,
-        login TEXT,        
-        node_id TEXT,
-        type TEXT
-    )
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER NOT NULL PRIMARY KEY,
+            login TEXT,
+            node_id TEXT,
+            avatar_url TEXT,
+            gravatar_id TEXT,
+            url TEXT,
+            html_url TEXT,
+            type TEXT,
+            site_admin BOOLEAN,
+            name TEXT,
+            company TEXT,
+            blog TEXT,
+            location TEXT,
+            email TEXT,
+            hireable BOOLEAN,
+            bio TEXT,
+            twitter_username TEXT,
+            public_repos INTEGER,
+            public_gists INTEGER,
+            followers INTEGER,
+            following INTEGER,
+            created_at TEXT,
+            updated_at TEXT
+        )
     ''')
 
     cursor.execute('''
@@ -144,37 +165,74 @@ def create_tables(conn):
    
     conn.commit()
 
-def insert_organization_data(conn, id, login, node_id, description):
+def insert_organization_data(conn, org_data):
     cursor = conn.cursor()
-    cursor.execute(f'''
+    sql = f'''
     INSERT INTO organizations (id, login, node_id, description) 
-    VALUES ({PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER})
+    VALUES ({PH}, {PH}, {PH}, {PH})
     ON CONFLICT(id) DO UPDATE SET 
         login = EXCLUDED.login, 
         node_id = EXCLUDED.node_id,
         description = EXCLUDED.description
-    ''', 
-    (id, login, node_id, description))
+    '''
+    cursor.execute(sql, (
+        org_data.get('id'), 
+        org_data.get('login'), 
+        org_data.get('node_id'), 
+        org_data.get('description')
+    ))
     conn.commit()
 
-def insert_user_data(conn, id, login, node_id, type):
+def insert_user_data(conn, user_data):
     cursor = conn.cursor()
-    cursor.execute(f'''
-    INSERT INTO users (id, login, node_id, type) 
-    VALUES ({PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER})
+    sql = f'''
+    INSERT INTO users (
+        id, login, node_id, type, avatar_url, gravatar_id, url, html_url,
+        site_admin, name, company, blog, location, email, hireable, bio, 
+        twitter_username, public_repos, public_gists, followers, following, 
+        created_at, updated_at
+    ) 
+    VALUES ({PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH})
     ON CONFLICT(id) DO UPDATE SET 
         login = EXCLUDED.login, 
         node_id = EXCLUDED.node_id, 
-        type = EXCLUDED.type
-    ''', 
-    (id, login, node_id, type))
+        type = EXCLUDED.type,
+        avatar_url = EXCLUDED.avatar_url, 
+        gravatar_id = EXCLUDED.gravatar_id, 
+        url = EXCLUDED.url, 
+        html_url = EXCLUDED.html_url,
+        site_admin = EXCLUDED.site_admin, 
+        name = EXCLUDED.name, 
+        company = EXCLUDED.company, 
+        blog = EXCLUDED.blog, 
+        location = EXCLUDED.location, 
+        email = EXCLUDED.email, 
+        hireable = EXCLUDED.hireable, 
+        bio = EXCLUDED.bio, 
+        twitter_username = EXCLUDED.twitter_username, 
+        public_repos = EXCLUDED.public_repos, 
+        public_gists = EXCLUDED.public_gists, 
+        followers = EXCLUDED.followers, 
+        following = EXCLUDED.following, 
+        created_at = EXCLUDED.created_at, 
+        updated_at = EXCLUDED.updated_at
+    '''
+    cursor.execute(sql, (
+        user_data.get('id'), user_data.get('login'), user_data.get('node_id'), user_data.get('avatar_url'), 
+        user_data.get('gravatar_id'), user_data.get('url'), user_data.get('html_url'), user_data.get('type'), 
+        user_data.get('site_admin'), user_data.get('name'), user_data.get('company'), user_data.get('blog'),
+        user_data.get('location'), user_data.get('email'), user_data.get('hireable'), user_data.get('bio'), 
+        user_data.get('twitter_username'), user_data.get('public_repos'), user_data.get('public_gists'),
+        user_data.get('followers'), user_data.get('following'), user_data.get('created_at'), user_data.get('updated_at')
+    ))
     conn.commit()
+
 
 def insert_repository_data(conn, id, node_id, name, full_name, private, owner, owner_type, owner_id, html_url, description, fork, url, created_at, updated_at, pushed_at, homepage, size, stargazers_count, watchers_count, language, has_issues, has_projects, has_downloads, has_wiki, has_pages, has_discussions, forks_count, mirror_url, archived, disabled, open_issues_count, license, allow_forking, is_template, web_commit_signoff_required, topics, visibility, forks, open_issues, watchers, default_branch):
     cursor = conn.cursor()
     cursor.execute(f'''
     INSERT INTO repositories (id, node_id, name, full_name, private, owner, owner_type, owner_id, html_url, description, fork, url, created_at, updated_at, pushed_at, homepage, size, stargazers_count, watchers_count, language, has_issues, has_projects, has_downloads, has_wiki, has_pages, has_discussions, forks_count, mirror_url, archived, disabled, open_issues_count, license, allow_forking, is_template, web_commit_signoff_required, topics, visibility, forks, open_issues, watchers, default_branch) 
-    VALUES ({PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER})
+    VALUES ({PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH})
     ON CONFLICT(id) DO UPDATE SET
         node_id = EXCLUDED.node_id,
         name = EXCLUDED.name,
@@ -224,7 +282,7 @@ def insert_issue_data(conn, id, url, repository_id, repository_url, node_id, num
     cursor = conn.cursor()
     cursor.execute(f'''
     INSERT INTO issues (id, url, repository_id, repository_url, node_id, number, title, user, labels, state, locked, assignee, assignees, milestone, comments, created_at, updated_at, closed_at, author_association, active_lock_reason, body, reactions, state_reason) 
-    VALUES ({PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, {PLACE_HOLDER}, ?)
+    VALUES ({PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH})
     ON CONFLICT(id) DO UPDATE SET 
         url = EXCLUDED.url,
         repository_id = EXCLUDED.repository_id,
