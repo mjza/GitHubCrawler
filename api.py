@@ -1,5 +1,5 @@
 import requests
-from database import open_connection, close_connection, create_tables, get_max_id, fetch_users_batch, insert_organization_data, insert_user_data, insert_repository_data, insert_issue_data
+from database import open_connection, close_connection, create_tables, get_max_id, fetch_users_batch, fetch_organizations_batch, insert_organization_data, insert_user_data, insert_repository_data, insert_issue_data
 from config import BASE_URL, PARAMS_BASE, HEADERS
 from requests.exceptions import ConnectionError, Timeout
 import time
@@ -80,11 +80,6 @@ def fetch_organizations():
                 print(f"Failed to fetch organization data since {params['since']}. HTTP {response.status_code}, Error: {response.text}")
             else:
                 print(f"Failed to fetch organization data since {params['since']}. No response is available")    
-
-            # Dynamically adjust sleep time based on remaining rate limit
-            if rate_limits:
-                sleep_time = 1 if rate_limits['remaining'] > 100 else 60
-                time.sleep(sleep_time)
     finally:
         close_connection(conn)
 
@@ -142,16 +137,11 @@ def fetch_users():
             elif response and response.status_code >= 400:
                 print(f"Failed to fetch users: HTTP {response.status_code}, Error: {response.text}")    
             else:
-                print(f"Failed to fetch users data since {params['since']}. No response is available.")
-
-            # Dynamically adjust sleep time based on remaining rate limit
-            if rate_limits:
-                sleep_time = 1 if rate_limits['remaining'] > 100 else 60
-                time.sleep(sleep_time)        
+                print(f"Failed to fetch users data since {params['since']}. No response is available.")     
     finally:
         close_connection(conn)
         
-def fetch_user_repositories():
+def fetch_repositories(type='organizations'):
     """
     Fetches repositories for each user from the GitHub API and inserts data into the database.
     """
@@ -169,14 +159,18 @@ def fetch_user_repositories():
                 time.sleep(sleep_duration)
                 continue
             
-            # Fetch a batch of users from the database
-            users = fetch_users_batch(conn, last_owner_id=last_owner_id, batch_size=100)
-            if not users:
+            # Fetch a batch of owners from the database
+            if type=='organizations':
+                owners = fetch_organizations_batch(conn, last_owner_id=last_owner_id, batch_size=100)
+            else:
+                owners = fetch_users_batch(conn, last_owner_id=last_owner_id, batch_size=100)
+                
+            if not owners:
                 print("No more users to process.")
                 break
 
-            for user in users:
-                login = user['login']
+            for owner in owners:
+                login = owner['login']
                 repos_url = f"{BASE_URL}/users/{login}/repos"
 
                 params= {
@@ -198,8 +192,8 @@ def fetch_user_repositories():
 
                         for repo in repos:
                             repo['owner'] = login
-                            repo['owner_id'] = user['id']
-                            repo['owner_type'] = user['type']
+                            repo['owner_id'] = owner['id']
+                            repo['owner_type'] = owner['type']
                             insert_repository_data(conn, repo)
 
                         if 'next' in response.links:
@@ -210,14 +204,9 @@ def fetch_user_repositories():
                         print(f"Failed to fetch repositories for user {repos_url}. HTTP {response.status_code}, Error: {response.text}")
                     else:
                         print(f"Failed to fetch repositories for user {repos_url}. No response is available")
-                    
-                    # Dynamically adjust sleep time based on remaining rate limit
-                    if rate_limits:
-                        sleep_time = 1 if rate_limits['remaining'] > 100 else 60
-                        time.sleep(sleep_time)
                                     
             # Assuming the 'id' of the last user in the batch is the highest 'id' processed in this batch
-            last_owner_id = users[-1]['id']
+            last_owner_id = owner[-1]['id']
             
     finally:
         close_connection(conn)

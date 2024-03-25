@@ -383,3 +383,67 @@ def fetch_users_batch(conn, last_owner_id=0, batch_size=100):
 
     users = cursor.fetchall()
     return [{'id': user[0], 'login': user[1], 'type': user[2]} for user in users]
+
+def fetch_users_batch(conn, last_owner_id=0, batch_size=100):
+    """
+    Fetches a batch of users from the database whose ID is greater than the last maximum owner_id
+    found in the repositories table and greater than any previously processed user ID.
+    
+    Args:
+        conn: Database connection object.
+        last_owner_id: The maximum owner_id processed in the last batch.
+        batch_size: Number of users to fetch per batch.
+    
+    Returns:
+        A list of dictionaries, each representing a user.
+    """
+    cursor = conn.cursor()
+
+    # First, find the current maximum owner_id in the repositories table
+    cursor.execute("SELECT MAX(owner_id) FROM repositories")
+    max_owner_id = cursor.fetchone()[0] or 0
+    max_id_to_fetch = max(last_owner_id, max_owner_id)
+
+    # Fetch users whose ID is greater than max_id_to_fetch
+    sql = f"""
+        SELECT id, login, type FROM users 
+        WHERE id > {PH} 
+        ORDER BY id ASC 
+        LIMIT {PH}
+        """
+    cursor.execute(sql, (max_id_to_fetch, batch_size))
+
+    users = cursor.fetchall()
+    return [{'id': user[0], 'login': user[1], 'type': user[2]} for user in users]
+
+def fetch_organizations_batch(conn, last_owner_id=0, batch_size=100):
+    """
+    Fetches a batch of orgs from the database whose ID is greater than the last maximum owner_id
+    found in the repositories table and greater than any previously processed user ID.
+    
+    Args:
+        conn: Database connection object.
+        last_owner_id: The maximum owner_id processed in the last batch.
+        batch_size: Number of orgs to fetch per batch.
+    
+    Returns:
+        A list of dictionaries, each representing a org.
+    """
+    cursor = conn.cursor()
+
+    # First, find the current maximum owner_id in the repositories table
+    cursor.execute("SELECT MAX(owner_id) FROM repositories")
+    max_owner_id = cursor.fetchone()[0] or 0
+    max_id_to_fetch = max(last_owner_id, max_owner_id)
+
+    # Fetch orgs whose ID is greater than max_id_to_fetch
+    sql = f"""
+        SELECT id, login FROM organizations 
+        WHERE id > {PH} 
+        ORDER BY id ASC 
+        LIMIT {PH}
+        """
+    cursor.execute(sql, (max_id_to_fetch, batch_size))
+
+    orgs = cursor.fetchall()
+    return [{'id': org[0], 'login': org[1], 'type': 'Organization'} for org in orgs]
