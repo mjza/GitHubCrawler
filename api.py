@@ -206,7 +206,7 @@ def fetch_repositories(type='organizations'):
                         print(f"Failed to fetch repositories for user {repos_url}. No response is available")
                                     
             # Assuming the 'id' of the last user in the batch is the highest 'id' processed in this batch
-            last_owner_id = owner[-1]['id']
+            last_owner_id = owners[-1]['id']
             
     finally:
         close_connection(conn)
