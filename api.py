@@ -201,8 +201,10 @@ def fetch_repositories(type='organizations'):
                         else:
                             has_more_pages = False
                     elif response and response.status_code >= 400:
+                        has_more_pages = False
                         print(f"Failed to fetch repositories for user {repos_url}. HTTP {response.status_code}, Error: {response.text}")
                     else:
+                        has_more_pages = False
                         print(f"Failed to fetch repositories for user {repos_url}. No response is available")
                                     
             # Assuming the 'id' of the last user in the batch is the highest 'id' processed in this batch

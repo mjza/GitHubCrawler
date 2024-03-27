@@ -37,7 +37,7 @@ def main():
     running = True   
 
     while running:
-        print(f"{blue}Welcome to the Stackoverflow CLI!")
+        print(f"{blue}Welcome to the GitHub CLI!")
         print("Available commands:")
         print("0. Exit")
         print("1. Fetch Organizations")
