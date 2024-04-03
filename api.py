@@ -1,8 +1,9 @@
 import requests
-from database import open_connection, close_connection, create_tables, get_max_id, fetch_users_batch, fetch_organizations_batch, insert_organization_data, insert_user_data, insert_repository_data, insert_issue_data
+from database import open_connection, close_connection, create_tables, get_max_id, fetch_users_batch, fetch_organizations_batch, fetch_repos_batch, insert_organization_data, insert_user_data, insert_repository_data, insert_issue_data
 from config import BASE_URL, PARAMS_BASE, HEADERS
 from requests.exceptions import ConnectionError, Timeout
 import time
+import traceback
 
 def safe_request(url, headers, params=None, max_retries=3, delay=5):
     """
@@ -166,7 +167,7 @@ def fetch_repositories(type='organizations'):
                 owners = fetch_users_batch(conn, last_owner_id=last_owner_id, batch_size=100)
                 
             if not owners:
-                print("No more users to process.")
+                print(f"No more {type} to process.")
                 break
 
             for owner in owners:
@@ -187,7 +188,7 @@ def fetch_repositories(type='organizations'):
                     if response.status_code == 200:
                         repos = response.json()
                         if not repos:
-                            print(f"No more repositories to fetch for user {login}.")
+                            #print(f"No more repositories to fetch for {type} {login}.")
                             break
 
                         for repo in repos:
@@ -210,5 +211,80 @@ def fetch_repositories(type='organizations'):
             # Assuming the 'id' of the last user in the batch is the highest 'id' processed in this batch
             last_owner_id = owners[-1]['id']
             
+    finally:
+        close_connection(conn)
+        
+def fetch_issues(type='organizations'):
+    """
+    Fetches issues for each repository from the GitHub API and inserts data into the database.
+    """
+    conn = open_connection()
+    try:
+        create_tables(conn)
+        
+        last_repository_id = 0
+        while True:
+            # Fetch a batch of repositories from the database
+             # Fetch a batch of owners from the database
+            if type=='organizations':
+                repos = fetch_repos_batch(conn, last_repository_id=last_repository_id, batch_size=100, owner_type='Organization')
+            else:
+                repos = fetch_repos_batch(conn, last_repository_id=last_repository_id, batch_size=100, owner_type='User')
+            
+            
+            if not repos:
+                print("No more repositories to process.")
+                break
+
+            for repo in repos:
+                full_name = repo['full_name']
+                issues_url = f"{BASE_URL}/repos/{full_name}/issues"
+
+                params = {
+                    'state': 'all',
+                    'sort': 'created',
+                    'direction': 'asc',
+                    'per_page': 100,
+                    'page': 1
+                }
+
+                has_more_pages = True
+                while has_more_pages:
+                    try:
+                        response = safe_request(issues_url, headers=HEADERS, params=params)
+                        if response and response.status_code == 200:
+                            issues = response.json()
+                            if not issues:
+                                print(f"No more issues to fetch for {full_name}.")
+                                break
+
+                            for issue in issues:
+                                try:
+                                    issue['repository_id'] = repo['id']
+                                    insert_issue_data(conn, issue)
+                                except Exception as e:
+                                    print(f"Error processing issue {issue.get('number', 'Unknown')} for repository {full_name}: {e}")
+                                    traceback.print_exc()  # Provides the stack trace
+                                    exit(1)
+
+                            if 'next' in response.links:
+                                params['page'] += 1
+                            else:
+                                has_more_pages = False
+                        elif response and response.status_code >= 400:
+                            print(f"Failed to fetch issues for repository {issues_url}. HTTP {response.status_code}, Error: {response.text}")
+                            has_more_pages = False
+                        else:
+                            print(f"Failed to fetch issues for repository {issues_url}. No response is available")
+                            has_more_pages = False
+                    except Exception as e:
+                        print(f"Exception occurred while fetching issues for {full_name}: {e}")
+                        traceback.print_exc()  # Print the stack trace to understand the cause of the exception
+                        has_more_pages = False  # Prevent further attempts to fetch pages
+                        exit(1)
+
+
+            # Assuming the 'id' of the last repository in the batch is the highest 'id' processed in this batch
+            last_repository_id = repos[-1]['id']
     finally:
         close_connection(conn)

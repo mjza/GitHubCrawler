@@ -34,6 +34,12 @@ def close_connection(conn):
     # Close the database connection
     conn.close()
     
+def remove_nul_characters(text):
+    """Remove NUL (0x00) characters from a string."""
+    if text is None:
+        return ''
+    return text.replace('\x00', '')
+    
 def create_tables(conn):
     cursor = conn.cursor()
     # Create the tags table
@@ -108,11 +114,11 @@ def create_tables(conn):
         archived BOOLEAN,
         disabled BOOLEAN,
         open_issues_count INTEGER,
-        license JSON,
+        license JSONB,
         allow_forking BOOLEAN,
         is_template BOOLEAN,
         web_commit_signoff_required BOOLEAN,
-        topics JSON,
+        topics JSONB,
         visibility TEXT,
         forks INTEGER,
         open_issues INTEGER,
@@ -124,20 +130,19 @@ def create_tables(conn):
 
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS issues (
-        id INTEGER NOT NULL PRIMARY KEY,
+        id BIGINT NOT NULL PRIMARY KEY,
         url TEXT,
-        repository_id INTEGER,
+        repository_id BIGINT,
         repository_url TEXT,        
         node_id TEXT,
         number INTEGER,
         title TEXT,
-        "user" TEXT,
-        labels JSON,
+        owner TEXT,
+        owner_type TEXT,
+        owner_id BIGINT,  
+        labels JSONB,
         state TEXT,
         locked BOOLEAN,
-        assignee TEXT,
-        assignees JSON,
-        milestone TEXT,
         comments INTEGER,
         created_at TIMESTAMP WITH TIME ZONE,
         updated_at TIMESTAMP WITH TIME ZONE,
@@ -145,17 +150,17 @@ def create_tables(conn):
         author_association TEXT,
         active_lock_reason TEXT,
         body TEXT,
-        reactions JSON,
+        reactions JSONB,
         state_reason TEXT
     )
     ''')
 
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS comments (
-        id INTEGER NOT NULL PRIMARY KEY,
+        id BIGINT NOT NULL PRIMARY KEY,
         node_id TEXT,
         url TEXT,
-        issue_id INTEGER,
+        issue_id BIGINT,
         issue_url TEXT,
         "user" TEXT,
         created_at TIMESTAMP WITH TIME ZONE,
@@ -305,8 +310,8 @@ def insert_issue_data(conn, issue_data):
     cursor = conn.cursor()
     sql = f'''
     INSERT INTO issues 
-    (id, url, repository_id, repository_url, node_id, number, title, user, labels, state, locked, assignee, assignees, milestone, comments, created_at, updated_at, closed_at, author_association, active_lock_reason, body, reactions, state_reason) 
-    VALUES ({PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH})
+    (id, url, repository_id, repository_url, node_id, number, title, owner, owner_type, owner_id, labels, state, locked, comments, created_at, updated_at, closed_at, author_association, active_lock_reason, body, reactions, state_reason) 
+    VALUES ({PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH}, {PH})
     ON CONFLICT(id) DO UPDATE SET 
         url = EXCLUDED.url,
         repository_id = EXCLUDED.repository_id,
@@ -314,13 +319,12 @@ def insert_issue_data(conn, issue_data):
         node_id = EXCLUDED.node_id,
         number = EXCLUDED.number,
         title = EXCLUDED.title,
-        user = EXCLUDED.user,
+        owner = EXCLUDED.owner,
+        owner_type = EXCLUDED.owner_type,
+        owner_id = EXCLUDED.owner_id,
         labels = EXCLUDED.labels,
         state = EXCLUDED.state,
-        locked = EXCLUDED.locked,
-        assignee = EXCLUDED.assignee,
-        assignees = EXCLUDED.assignees,
-        milestone = EXCLUDED.milestone,
+        locked = EXCLUDED.locked,        
         comments = EXCLUDED.comments,
         created_at = EXCLUDED.created_at,
         updated_at = EXCLUDED.updated_at,
@@ -333,11 +337,12 @@ def insert_issue_data(conn, issue_data):
     '''
     cursor.execute(sql, (
         issue_data.get('id'), issue_data.get('url'), issue_data.get('repository_id'), issue_data.get('repository_url'), 
-        issue_data.get('node_id'), issue_data.get('number'), issue_data.get('title'), issue_data.get('user'), 
-        issue_data.get('labels'), issue_data.get('state'), issue_data.get('locked'), issue_data.get('assignee'), 
-        issue_data.get('assignees'), issue_data.get('milestone'), issue_data.get('comments'), issue_data.get('created_at'), 
+        issue_data.get('node_id'), issue_data.get('number'), remove_nul_characters(issue_data.get('title')), issue_data.get('user', {}).get('login'), 
+        issue_data.get('user', {}).get('type'), issue_data.get('user', {}).get('id'),
+        json.dumps(issue_data.get('labels', [])), issue_data.get('state'), issue_data.get('locked'), 
+        issue_data.get('comments'), issue_data.get('created_at'), 
         issue_data.get('updated_at'), issue_data.get('closed_at'), issue_data.get('author_association'), 
-        issue_data.get('active_lock_reason'), issue_data.get('body'), issue_data.get('reactions'), issue_data.get('state_reason')
+        issue_data.get('active_lock_reason'), remove_nul_characters(issue_data.get('body')), json.dumps(issue_data.get('reactions', {})), issue_data.get('state_reason')
     ))
     conn.commit()
 
@@ -351,38 +356,6 @@ def get_max_id(conn, table_name):
     if result:
         return result[0] or 0
     return 0
-
-def fetch_users_batch(conn, last_owner_id=0, batch_size=100):
-    """
-    Fetches a batch of users from the database whose ID is greater than the last maximum owner_id
-    found in the repositories table and greater than any previously processed user ID.
-    
-    Args:
-        conn: Database connection object.
-        last_owner_id: The maximum owner_id processed in the last batch.
-        batch_size: Number of users to fetch per batch.
-    
-    Returns:
-        A list of dictionaries, each representing a user.
-    """
-    cursor = conn.cursor()
-
-    # First, find the current maximum owner_id in the repositories table
-    cursor.execute("SELECT MAX(owner_id) FROM repositories")
-    max_owner_id = cursor.fetchone()[0] or 0
-    max_id_to_fetch = max(last_owner_id, max_owner_id)
-
-    # Fetch users whose ID is greater than max_id_to_fetch
-    sql = f"""
-        SELECT id, login, type FROM users 
-        WHERE id > {PH} 
-        ORDER BY id ASC 
-        LIMIT {PH}
-        """
-    cursor.execute(sql, (max_id_to_fetch, batch_size))
-
-    users = cursor.fetchall()
-    return [{'id': user[0], 'login': user[1], 'type': user[2]} for user in users]
 
 def fetch_users_batch(conn, last_owner_id=0, batch_size=100):
     """
@@ -447,3 +420,36 @@ def fetch_organizations_batch(conn, last_owner_id=0, batch_size=100):
 
     orgs = cursor.fetchall()
     return [{'id': org[0], 'login': org[1], 'type': 'Organization'} for org in orgs]
+
+def fetch_repos_batch(conn, last_repository_id=0, batch_size=100, owner_type='*'):
+    """
+    Fetches a batch of repos from the database whose ID is greater than the last maximum repository_id
+    found in the issues table and greater than any previously processed repository ID.
+    
+    Args:
+        conn: Database connection object.
+        last_repository_id: The maximum repository_id processed in the last batch.
+        batch_size: Number of repositories to fetch per batch.
+    
+    Returns:
+        A list of dictionaries, each representing a repository.
+    """
+    cursor = conn.cursor()
+
+    # First, find the current maximum repository_id in the issues table
+    cursor.execute("SELECT MAX(repository_id) FROM issues")
+    max_repository_id = cursor.fetchone()[0] or 0
+    max_id_to_fetch = max(last_repository_id, max_repository_id)
+
+    # Fetch repositories whose ID is greater than max_id_to_fetch
+    sql = f"""
+        SELECT id, full_name FROM repositories 
+        WHERE id > {PH} 
+        AND owner_type = {PH}
+        ORDER BY id ASC 
+        LIMIT {PH}
+        """
+    cursor.execute(sql, (max_id_to_fetch, owner_type, batch_size))
+
+    repos = cursor.fetchall()
+    return [{'id': repo[0], 'full_name': repo[1]} for repo in repos]
