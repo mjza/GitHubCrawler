@@ -53,17 +53,19 @@ def fetch_organizations():
         params.update({
             'since': max_id
         })
-        
-        has_more = True
-        
+        iterate = 0
+        has_more = True        
         while has_more:
-            rate_limits = get_rate_limits()
-            if rate_limits and rate_limits['remaining'] == 0:
-                reset_time = rate_limits['reset']
-                sleep_duration = max(reset_time - time.time(), 1)
-                print(f"Rate limit exceeded. Sleeping for {sleep_duration} seconds.")
-                time.sleep(sleep_duration)
-                continue
+            if iterate == 100:  
+                iterate = 0
+                rate_limits = get_rate_limits()
+                if rate_limits and rate_limits['remaining'] == 0:
+                    reset_time = rate_limits['reset']
+                    sleep_duration = max(reset_time - time.time(), 1)
+                    print(f"Rate limit exceeded. Sleeping for {sleep_duration} seconds.")
+                    time.sleep(sleep_duration)
+                    continue
+            iterate += 1
 
             response = safe_request(base_url, headers=HEADERS, params=params)
             if response and response.status_code == 200:
@@ -99,16 +101,19 @@ def fetch_users():
         params.update({
             'since': max_id
         })
-        
+        iterate = 0
         has_more = True        
         while has_more:
-            rate_limits = get_rate_limits()
-            if rate_limits and rate_limits['remaining'] == 0:
-                reset_time = rate_limits['reset']
-                sleep_duration = max(reset_time - time.time(), 1)
-                print(f"Rate limit exceeded. Sleeping for {sleep_duration} seconds.")
-                time.sleep(sleep_duration)
-                continue
+            if iterate == 100:  
+                iterate = 0
+                rate_limits = get_rate_limits()
+                if rate_limits and rate_limits['remaining'] == 0:
+                    reset_time = rate_limits['reset']
+                    sleep_duration = max(reset_time - time.time(), 1)
+                    print(f"Rate limit exceeded. Sleeping for {sleep_duration} seconds.")
+                    time.sleep(sleep_duration)
+                    continue
+            iterate += 1
 
             response = safe_request(base_url, headers=HEADERS, params=params)
             if response and response.status_code == 200:
@@ -149,17 +154,19 @@ def fetch_repositories(type='organizations'):
     conn = open_connection()
     try:
         create_tables(conn)
-
+        iterate = 0
         last_owner_id = 0
         while True:
-            rate_limits = get_rate_limits()
-            if rate_limits and rate_limits['remaining'] == 0:
-                reset_time = rate_limits['reset']
-                sleep_duration = max(reset_time - time.time(), 1)
-                print(f"Rate limit exceeded. Sleeping for {sleep_duration} seconds.")
-                time.sleep(sleep_duration)
-                continue
-            
+            if iterate == 100:  
+                iterate = 0
+                rate_limits = get_rate_limits()
+                if rate_limits and rate_limits['remaining'] == 0:
+                    reset_time = rate_limits['reset']
+                    sleep_duration = max(reset_time - time.time(), 1)
+                    print(f"Rate limit exceeded. Sleeping for {sleep_duration} seconds.")
+                    time.sleep(sleep_duration)
+                    continue
+            iterate += 1
             # Fetch a batch of owners from the database
             if type=='organizations':
                 owners = fetch_organizations_batch(conn, last_owner_id=last_owner_id, batch_size=100)
@@ -221,11 +228,21 @@ def fetch_issues(type='organizations'):
     conn = open_connection()
     try:
         create_tables(conn)
-        
+        iterate = 0;
         last_repository_id = 0
         while True:
+            if iterate == 100:  
+                iterate = 0        
+                rate_limits = get_rate_limits()
+                if rate_limits and rate_limits['remaining'] == 0:
+                    reset_time = rate_limits['reset']
+                    sleep_duration = max(reset_time - time.time(), 1)
+                    print(f"Rate limit exceeded. Sleeping for {sleep_duration} seconds.")
+                    time.sleep(sleep_duration)
+                    continue
+            iterate += 1
             # Fetch a batch of repositories from the database
-             # Fetch a batch of owners from the database
+            # Fetch a batch of owners from the database
             if type=='organizations':
                 repos = fetch_repos_batch(conn, last_repository_id=last_repository_id, batch_size=100, owner_type='Organization')
             else:
