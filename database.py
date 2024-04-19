@@ -170,7 +170,36 @@ def create_tables(conn):
         reactions JSON
     )
     ''')
+    
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS logs (
+        id SERIAL PRIMARY KEY,
+        last_org_id BIGINT,
+        last_user_id BIGINT,
+        last_org_repository_id BIGINT,
+        last_user_repository_id BIGINT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    )
+    ''')
    
+    conn.commit()
+
+def insert_log_data(conn, log_data):
+    cursor = conn.cursor()
+    # Assuming PostgreSQL for SQL syntax; adjust as necessary for other DBMS like MySQL
+    sql = f'''
+    INSERT INTO logs 
+    (last_org_id, last_user_id, last_org_repository_id, last_user_repository_id, created_at) 
+    VALUES ({PH}, {PH}, {PH}, {PH}, CURRENT_TIMESTAMP)
+    '''
+    # Values to insert or update
+    values = (
+        log_data.get('last_org_id', 0), 
+        log_data.get('last_user_id', 0), 
+        log_data.get('last_org_repository_id', 0), 
+        log_data.get('last_user_repository_id', 0)
+    )
+    cursor.execute(sql, values)
     conn.commit()
 
 def insert_organization_data(conn, org_data):
@@ -345,6 +374,35 @@ def insert_issue_data(conn, issue_data):
         issue_data.get('active_lock_reason'), remove_nul_characters(issue_data.get('body')), json.dumps(issue_data.get('reactions', {})), issue_data.get('state_reason')
     ))
     conn.commit()
+    
+def get_max_ids(conn):
+    """
+    Fetches the maximum values for columns starting with 'last_' in a specified table.
+    """
+    cursor = conn.cursor()
+    # SQL to fetch maximum values of specific columns
+    sql = '''
+    SELECT MAX(last_org_id) as max_last_org_id, 
+           MAX(last_user_id) as max_last_user_id, 
+           MAX(last_org_repository_id) as max_last_org_repository_id, 
+           MAX(last_user_repository_id) as max_last_user_repository_id 
+    FROM logs
+    '''
+    cursor.execute(sql)
+    result = cursor.fetchone()
+    if result:
+        return {
+            "max_last_org_id": result[0] or 0,
+            "max_last_user_id": result[1] or 0,
+            "max_last_org_repository_id": result[2] or 0,
+            "max_last_user_repository_id": result[3] or 0
+        }
+    return {
+        "max_last_org_id": 0, 
+        "max_last_user_id": 0, 
+        "max_last_org_repository_id": 0, 
+        "max_last_user_repository_id": 0
+    }
 
 def get_max_id(conn, table_name):
     """

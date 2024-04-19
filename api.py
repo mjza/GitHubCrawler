@@ -1,5 +1,5 @@
 import requests
-from database import open_connection, close_connection, create_tables, get_max_id, fetch_users_batch, fetch_organizations_batch, fetch_repos_batch, insert_organization_data, insert_user_data, insert_repository_data, insert_issue_data
+from database import open_connection, close_connection, create_tables, get_max_id, fetch_users_batch, fetch_organizations_batch, fetch_repos_batch, insert_organization_data, insert_user_data, insert_repository_data, insert_issue_data, insert_log_data, get_max_ids
 from config import BASE_URL, PARAMS_BASE, HEADERS
 from requests.exceptions import ConnectionError, Timeout
 import time
@@ -155,7 +155,13 @@ def fetch_repositories(type='organizations'):
     try:
         create_tables(conn)
         iterate = 0
-        last_owner_id = 0
+        # Keep trak of last processed owner
+        max_ids = get_max_ids(conn)
+        if type=='organizations':
+            last_owner_id = max_ids.get('max_last_org_id')
+        else:
+            last_owner_id = max_ids.get('max_last_user_id')
+            
         while True:
             if iterate == 100:  
                 iterate = 0
@@ -168,6 +174,7 @@ def fetch_repositories(type='organizations'):
                     continue
             iterate += 1
             # Fetch a batch of owners from the database
+            
             if type=='organizations':
                 owners = fetch_organizations_batch(conn, last_owner_id=last_owner_id, batch_size=100)
             else:
@@ -195,7 +202,7 @@ def fetch_repositories(type='organizations'):
                     if response.status_code == 200:
                         repos = response.json()
                         if not repos:
-                            #print(f"No more repositories to fetch for {type} {login}.")
+                            # print(f"No more repositories to fetch for {type} {login}.")
                             break
 
                         for repo in repos:
@@ -218,6 +225,12 @@ def fetch_repositories(type='organizations'):
             # Assuming the 'id' of the last user in the batch is the highest 'id' processed in this batch
             last_owner_id = owners[-1]['id']
             
+            # Store the lates owner that we processed
+            if type=='organizations':
+                log_data = {'last_org_id': last_owner_id}
+            else:
+                log_data = {'last_user_id': last_owner_id}    
+            insert_log_data(conn, log_data)
     finally:
         close_connection(conn)
         
@@ -228,8 +241,14 @@ def fetch_issues(type='organizations'):
     conn = open_connection()
     try:
         create_tables(conn)
-        iterate = 0;
-        last_repository_id = 0
+        iterate = 0
+        # Keep trak of last processed repository
+        max_ids = get_max_ids(conn)
+        if type=='organizations':
+            last_repository_id = max_ids.get('max_last_org_repository_id')
+        else:
+            last_repository_id = max_ids.get('max_last_user_repository_id')
+            
         while True:
             if iterate == 100:  
                 iterate = 0        
@@ -272,7 +291,7 @@ def fetch_issues(type='organizations'):
                         if response and response.status_code == 200:
                             issues = response.json()
                             if not issues:
-                                print(f"No more issues to fetch for {full_name}.")
+                                # print(f"No more issues to fetch for {full_name}.")
                                 break
 
                             for issue in issues:
@@ -303,5 +322,12 @@ def fetch_issues(type='organizations'):
 
             # Assuming the 'id' of the last repository in the batch is the highest 'id' processed in this batch
             last_repository_id = repos[-1]['id']
+            
+            # Store the lates repository that we processed
+            if type=='organizations':
+                log_data = {'last_org_repository_id': last_repository_id}
+            else:
+                log_data = {'last_user_repository_id': last_repository_id}    
+            insert_log_data(conn, log_data)
     finally:
         close_connection(conn)
